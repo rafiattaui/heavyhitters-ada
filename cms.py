@@ -4,31 +4,40 @@ from collections import defaultdict
 from typing import List, Tuple
 import time
 import hashlib
-import array # Use array for memory-efficient storage, and more accurate memory size calculation
+import zlib
 
 class CountMinSketch:
     def __init__(self, width: int = 10000, depth: int = 5):
+
+        # CMS's advatage is that it uses fixed memory and provides probabilistic estimates.
+        # Width and depth determine the accuracy and confidence of the estimates.
+        # No matter how large the input stream is, the memory used remains constant.
         self.width = width
         self.depth = depth
+        # There's a lot of overhead with list of lists in Python, but it's simpler to implement.
+        self.table = [[0] * width for _ in range(depth)]
         # Use 1D list or array.array for better cache locality and memory
-        self.table = [array.array('I', [0] * width) for _ in range(depth)]
+        # Stores integers as 4-byte unsigned integers similar to C's uint32_t
+        # Reducing overhead compared to list of lists
+        # self.table = [array.array('I', [0] * width) for _ in range(depth)] using the array library, optional
+        
+    def _get_hashes(self, item: str):
+        data = item.encode('utf-8')
+
+        h1 = zlib.crc32(data) & 0xffffffff # Bitwise AND to ensure unsigned integer
+        h2 = zlib.adler32(data) & 0xffffffff # Bitwise AND to ensure unsigned integer
+        return h1, h2
 
     def add(self, item: str, count: int = 1):
         item = item.lower().strip()
-        # Pre-calculate two basic hashes
-        h1 = int(hashlib.md5(item.encode('utf-8')).hexdigest(), 16)
-        h2 = int(hashlib.sha1(item.encode('utf-8')).hexdigest(), 16)
-        
+        h1, h2 = self._get_hashes(item)
         for i in range(self.depth):
-            # Kirsch-Mitzenmacher: hash_i = h1 + i * h2
             index = (h1 + i * h2) % self.width
             self.table[i][index] += count
 
     def estimate(self, item: str) -> int:
         item = item.lower().strip()
-        h1 = int(hashlib.md5(item.encode('utf-8')).hexdigest(), 16)
-        h2 = int(hashlib.sha1(item.encode('utf-8')).hexdigest(), 16)
-        
+        h1, h2 = self._get_hashes(item)
         res = float('inf')
         for i in range(self.depth):
             index = (h1 + i * h2) % self.width
@@ -36,24 +45,20 @@ class CountMinSketch:
         return int(res)
 
     def get_stats(self) -> dict:
-        # Calculate true deep memory
-        # 1. Size of the outer list
-        total_mem = sys.getsizeof(self.table) 
-        
-        # 2. Size of each row and each integer object
+        """Calculates deep memory for List of Lists structure."""
+        # Start with the outer list
+        total_mem = sys.getsizeof(self.table)
         for row in self.table:
+            # Add the inner list structure
             total_mem += sys.getsizeof(row)
-            # Sum the size of every integer in the row
-            # Note: In Python, integers are objects (usually 28 bytes each)
+            # Add the size of every integer object in the row
             total_mem += sum(sys.getsizeof(cell) for cell in row)
-
+            
         return {
-            'width': self.width,
-            'depth': self.depth,
-            'total_cells': self.width * self.depth,
-            'memory_bytes': total_mem,
-            'memory_kb': total_mem / 1024,
-            'memory_mb': total_mem / (1024 * 1024)
+            "width": self.width,
+            "depth": self.depth,
+            "memory_kb": total_mem / 1024,
+            "memory_mb": total_mem / (1024 * 1024)
         }
 
 def process_aol_dataset(filepath: str, cms: CountMinSketch) -> Tuple[int, dict]:
@@ -105,6 +110,25 @@ def process_aol_dataset(filepath: str, cms: CountMinSketch) -> Tuple[int, dict]:
 def get_top_queries(query_freq: dict, n: int = 10) -> List[Tuple[str, int]]:
     return sorted(query_freq.items(), key=lambda x: x[1], reverse=True)[:n]
 
+def calculate_metrics(gt_data, algorithm_data, total_n, threshold_ratio=0.001):
+    threshold = total_n * threshold_ratio
+    abs_errors = []
+    rel_errors = []
+    
+    # Only evaluate items that are actually "Heavy"
+    heavy_hitters = {k: v for k, v in gt_data.items() if v >= threshold}
+    
+    for query, actual in heavy_hitters.items():
+        est = algorithm_data.get(query, 0)
+        error = abs(actual - est)
+        abs_errors.append(error)
+        rel_errors.append(error / actual)
+        
+    avg_abs = sum(abs_errors) / len(abs_errors) if abs_errors else 0
+    avg_rel = sum(rel_errors) / len(rel_errors) if rel_errors else 0
+    
+    return avg_abs, avg_rel, len(heavy_hitters)
+
 
 def main():
     filepath = "user-ct-test-collection-01.txt"
@@ -134,7 +158,7 @@ def main():
     print(f"\nCount-Min Sketch Configuration:")
     print(f"  Width: {stats['width']:,}")
     print(f"  Depth: {stats['depth']}")
-    print(f"  Total cells: {stats['total_cells']:,}")
+    print(f"  Total cells: {stats['width'] * stats['depth']:,}")
     print(f"  Approximate memory: {stats['memory_kb']:.2f} KB ({stats['memory_mb']:.2f} MB)")
     
 
@@ -143,6 +167,12 @@ def main():
     for rank, (query, count) in enumerate(top_queries, 1):
         estimated = cms.estimate(query)
         print(f"{rank:2d}. {query[:50]:<50} | Actual: {count:5d} | Estimated: {estimated:5d}")
+
+    avg_abs, avg_rel, _ = calculate_metrics(query_freq, {q: cms.estimate(q) for q in query_freq}, total_queries)
+
+    print("\nOverall Error Metrics for Heavy Hitters (Threshold: 0.001)")
+    print(f"\nAverage Absolute Error for Heavy Hitters: {avg_abs:.2f}")
+    print(f"\nAverage Relative Error for Heavy Hitters: {avg_rel*100:.2f}%")
     
     print("Interactive Query Mode")
     print("Enter search queries to estimate their frequency.")

@@ -24,21 +24,37 @@ Misra-Gries RAM:    0.21 MB
 Lossy Counting RAM: 0.19 MB
 Space Reduction:    99.81%
 
+ Processing Times:
+Ground Truth:   3.7431 seconds
+Misra-Gries:    3.0625 seconds
+Lossy Counting: 3.7410 seconds
+
+ Average Errors for Heavy Hitters (Threshold: 0.0010%)
+Misra-Gries:    Avg Absolute Error: 1667.45, Avg Relative Error: 23.03%
+Lossy Counting: Avg Absolute Error: 17.64, Avg Relative Error: 0.40%
+
 
 # Count-Min Sketch
+Processing completed in 10.63 seconds.
 Count-Min Sketch Configuration:
   Width: 10,000
   Depth: 5
   Total cells: 50,000
-  Approximate memory: 1563.01 KB (1.53 MB)
+  Approximate memory: 1758.20 KB (1.72 MB)
 Top 10 Most Frequent Queries
- 1. google                                             | Actual: 32163 | Estimated: 32426
- 2. yahoo                                              | Actual: 13646 | Estimated: 13846
- 3. ebay                                               | Actual: 13075 | Estimated: 13354
- 4. yahoo.com                                          | Actual:  8743 | Estimated:  8976
- 5. mapquest                                           | Actual:  8719 | Estimated:  8965
- 6. myspace.com                                        | Actual:  8587 | Estimated:  8806
- 7. google.com                                         | Actual:  7985 | Estimated:  8243
- 8. myspace                                            | Actual:  6877 | Estimated:  7126
- 9. www.yahoo.com                                      | Actual:  4240 | Estimated:  4486
-10. internet                                           | Actual:  4207 | Estimated:  4423
+ 1. google                                             | Actual: 32163 | Estimated: 32407
+ 2. yahoo                                              | Actual: 13646 | Estimated: 13856
+ 3. ebay                                               | Actual: 13075 | Estimated: 13349
+ 4. yahoo.com                                          | Actual:  8743 | Estimated:  8927
+ 5. mapquest                                           | Actual:  8719 | Estimated:  8984
+ 6. myspace.com                                        | Actual:  8587 | Estimated:  8795
+ 7. google.com                                         | Actual:  7985 | Estimated:  8265
+ 8. myspace                                            | Actual:  6877 | Estimated:  7246
+ 9. www.yahoo.com                                      | Actual:  4240 | Estimated:  4469
+10. internet                                           | Actual:  4207 | Estimated:  4426
+
+Overall Error Metrics for Heavy Hitters (Threshold: 0.001)
+Average Absolute Error for Heavy Hitters: 247.27
+Average Relative Error for Heavy Hitters: 3.40%
+
+

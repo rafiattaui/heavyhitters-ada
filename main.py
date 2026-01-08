@@ -60,6 +60,10 @@ def run_misra_gries_test(filename, k=2000):
     return candidates, duration
 
 def get_deep_size(obj, seen=None):
+    """
+    Recursively finds size of objects, including contents of containers.
+    By default, it uses a set to track seen object ids to avoid double-counting.
+    """
     if seen is None: seen = set()
     obj_id = id(obj)
     if obj_id in seen: return 0
@@ -71,6 +75,25 @@ def get_deep_size(obj, seen=None):
     elif isinstance(obj, (list, tuple, set, collections.Counter)):
         size += sum(get_deep_size(i, seen) for i in obj)
     return size
+
+def calculate_metrics(gt_data, algorithm_data, total_n, threshold_ratio=0.001):
+    threshold = total_n * threshold_ratio
+    abs_errors = []
+    rel_errors = []
+    
+    # Only evaluate items that are actually "Heavy"
+    heavy_hitters = {k: v for k, v in gt_data.items() if v >= threshold}
+    
+    for query, actual in heavy_hitters.items():
+        est = algorithm_data.get(query, 0)
+        error = abs(actual - est)
+        abs_errors.append(error)
+        rel_errors.append(error / actual)
+        
+    avg_abs = sum(abs_errors) / len(abs_errors) if abs_errors else 0
+    avg_rel = sum(rel_errors) / len(rel_errors) if rel_errors else 0
+    
+    return avg_abs, avg_rel, len(heavy_hitters)
 
 def main():
     filename = "user-ct-test-collection-01.txt"
@@ -87,6 +110,9 @@ def main():
     
     # 3. Lossy Counting
     lc_data, lc_time = run_loss_counting_test(filename, epsilon=eps)
+
+    mg_avg_absolute_error, mg_avg_relative_error, mg_heavy_hitters_count = calculate_metrics(gt_data, mg_data, total_n)
+    lc_avg_absolute_error, lc_avg_relative_error, lc_heavy_hitters_count = calculate_metrics(gt_data, lc_data, total_n)
 
     # OUTPUT REPORT
     print("\n" + "="*85)
@@ -108,6 +134,15 @@ def main():
     print(f"Misra-Gries RAM:    {get_deep_size(mg_data)/1024/1024:,.2f} MB")
     print(f"Lossy Counting RAM: {get_deep_size(lc_data)/1024/1024:,.2f} MB")
     print(f"Space Reduction:    {100 * (1 - get_deep_size(lc_data)/get_deep_size(gt_data)):.2f}%")
+
+    print("\n Processing Times:")
+    print(f"Ground Truth:   {gt_time:.4f} seconds")
+    print(f"Misra-Gries:    {mg_time:.4f} seconds")
+    print(f"Lossy Counting: {lc_time:.4f} seconds")
+    
+    print("\n Average Errors for Heavy Hitters (Threshold: {:.4f}%)".format(0.001))
+    print(f"Misra-Gries:    Avg Absolute Error: {mg_avg_absolute_error:.2f}, Avg Relative Error: {mg_avg_relative_error*100:.2f}%")
+    print(f"Lossy Counting: Avg Absolute Error: {lc_avg_absolute_error:.2f}, Avg Relative Error: {lc_avg_relative_error*100:.2f}%")
 
 if __name__ == "__main__":
     main()
