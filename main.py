@@ -1,83 +1,113 @@
 import sys
 import time
 import collections
-from lossy import LossyCounting
-from misragries import misra_gries
 
-def get_deep_size(obj):
-    """Calculates memory size of a container and all the strings inside it."""
+def run_ground_truth(filename):
+    counts = collections.Counter()
+    total = 0
+    start = time.perf_counter()
+    with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
+        next(f)
+        for line in f:
+            parts = line.split('\t')
+            if len(parts) > 1:
+                query = parts[1].lower().strip()
+                if query and query not in ['-', '', '""', "''"]:
+                    counts[query] += 1
+                    total += 1
+    duration = time.perf_counter() - start
+    # Return: (Total Processed, The actual Counter object, Duration)
+    return total, counts, duration
+
+def run_loss_counting_test(filename, epsilon=0.0005):
+    from lossy import LossyCounting 
+    lc = LossyCounting(epsilon)
+    start = time.perf_counter()
+    with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
+        next(f)
+        for line in f:
+            parts = line.split('\t')
+            if len(parts) > 1:
+                query = parts[1].lower().strip()
+                if query and query not in ['-', '', '""', "''"]:
+                    lc.add(query)
+    duration = time.perf_counter() - start
+    # Return: (The counts dictionary inside LC, Duration)
+    return lc.counts, duration
+
+def run_misra_gries_test(filename, k=2000):
+    candidates = {}
+    start = time.perf_counter()
+    with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
+        next(f)
+        for line in f:
+            parts = line.split('\t')
+            if len(parts) > 1:
+                query = parts[1].lower().strip()
+                if not query or query in ['-', '', '""', "''"]: continue
+                
+                if query in candidates:
+                    candidates[query] += 1
+                elif len(candidates) < k - 1:
+                    candidates[query] = 1
+                else:
+                    for key in list(candidates.keys()):
+                        candidates[key] -= 1
+                        if candidates[key] == 0:
+                            del candidates[key]
+    duration = time.perf_counter() - start
+    # Return: (The candidate dictionary, Duration)
+    return candidates, duration
+
+def get_deep_size(obj, seen=None):
+    if seen is None: seen = set()
+    obj_id = id(obj)
+    if obj_id in seen: return 0
+    seen.add(obj_id)
+    
     size = sys.getsizeof(obj)
     if isinstance(obj, dict):
-        size += sum(sys.getsizeof(k) + sys.getsizeof(v) for k, v in obj.items())
-    elif isinstance(obj, (list, set, collections.Counter)):
-        size += sum(sys.getsizeof(i) for i in obj)
+        size += sum(get_deep_size(k, seen) + get_deep_size(v, seen) for k, v in obj.items())
+    elif isinstance(obj, (list, tuple, set, collections.Counter)):
+        size += sum(get_deep_size(i, seen) for i in obj)
     return size
 
-def run_comparative_test(filename, epsilon=0.0005):
-    # k for Misra-Gries is set to 1/epsilon to make them comparable
-    k = int(1 / epsilon)
-    
-    lc = LossyCounting(epsilon)
-    mg_candidates = {}
-    ground_truth = collections.Counter()
-    
-    print(f"Comparing Algorithms on: {filename}")
-    print(f"Parameters: Epsilon={epsilon}, MG-k={k}")
-    print("-" * 60)
-    
-    try:
-        with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
-            next(f)  # Skip header
-            
-            start_time = time.perf_counter()
-            for line in f:
-                columns = line.split('\t')
-                if len(columns) > 1:
-                    query = columns[1].lower().strip()
-                    if not query: continue
+def main():
+    filename = "user-ct-test-collection-01.txt"
+    eps = 0.0005
+    k_val = int(1/eps)
 
-                    if query and query not in ['-', '', '""', "''"]:
-                    
-                        # 1. Update Ground Truth
-                        ground_truth[query] += 1
-                        
-                        # 2. Update Lossy Counting
-                        lc.add(query)
-                        
-                        # 3. Update Misra-Gries (One-Pass)
-                        if query in mg_candidates:
-                            mg_candidates[query] += 1
-                        elif len(mg_candidates) < k - 1:
-                            mg_candidates[query] = 1
-                        else:
-                            for key in list(mg_candidates.keys()):
-                                mg_candidates[key] -= 1
-                                if mg_candidates[key] == 0:
-                                    del mg_candidates[key]
-            
-            end_time = time.perf_counter()
+    print(f"--- Processing AOL Dataset (2006) ---")
+    
+    # 1. Ground Truth
+    total_n, gt_data, gt_time = run_ground_truth(filename)
+    
+    # 2. Misra-Gries
+    mg_data, mg_time = run_misra_gries_test(filename, k=k_val)
+    
+    # 3. Lossy Counting
+    lc_data, lc_time = run_loss_counting_test(filename, epsilon=eps)
 
-        # Memory Analysis
-        mem_lc = get_deep_size(lc.counts) + get_deep_size(lc.bucket_id)
-        mem_mg = get_deep_size(mg_candidates)
-        mem_gt = get_deep_size(ground_truth)
+    # OUTPUT REPORT
+    print("\n" + "="*85)
+    print(f"{'RANK':<5} | {'QUERY':<20} | {'ACTUAL':<10} | {'MG EST':<10} | {'LC EST':<10}")
+    print("-" * 85)
+
+    top_10 = gt_data.most_common(10)
+    for rank, (query, actual) in enumerate(top_10, 1):
+        mg_est = mg_data.get(query, 0)
+        lc_est = lc_data.get(query, 0)
         
-        print(f"Results:")
-        print(f"Processing Time:      {end_time - start_time:.4f}s")
-        print(f"Ground Truth Size:    {mem_gt / 1024:.2f} KB ({len(ground_truth)} keys)")
-        print(f"Lossy Counting Size:  {mem_lc / 1024:.2f} KB ({len(lc.counts)} keys)")
-        print(f"Misra-Gries Size:     {mem_mg / 1024:.2f} KB ({len(mg_candidates)} keys)")
-        print("-" * 60)
-        
-        # Accuracy Check (Top 5)
-        print(f"{'Query':<20} | {'Actual':<8} | {'LC Est':<8} | {'MG Est':<8}")
-        for item, actual in ground_truth.most_common(5):
-            lc_est = lc.counts.get(item, 0)
-            mg_est = mg_candidates.get(item, 0)
-            print(f"{item:<20} | {actual:<8} | {lc_est:<8} | {mg_est:<8}")
+        # In Misra-Gries, if an item is present, its count is an underestimate
+        # In Lossy Counting, if it's present, its count is an underestimate
+        print(f"{rank:<5} | {query[:20]:<20} | {actual:<10} | {mg_est:<10} | {lc_est:<10}")
 
-    except FileNotFoundError:
-        print(f"Error: Could not find '{filename}'.")
+    print("\n" + "="*85)
+    print("ALGORITHM STATISTICS:")
+    print(f"Ground Truth RAM:   {get_deep_size(gt_data)/1024/1024:,.2f} MB")
+    print(f"Misra-Gries RAM:    {get_deep_size(mg_data)/1024/1024:,.2f} MB")
+    print(f"Lossy Counting RAM: {get_deep_size(lc_data)/1024/1024:,.2f} MB")
+    print(f"Space Reduction:    {100 * (1 - get_deep_size(lc_data)/get_deep_size(gt_data)):.2f}%")
 
 if __name__ == "__main__":
-    run_comparative_test("user-ct-test-collection-01.txt")
+    main()

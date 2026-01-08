@@ -1,27 +1,36 @@
 ## Results based on first iteration.
 
 # Lossy Counting & Misra-Gries Runtime
-Parameters: Epsilon=0.0005, MG-k=2000
-------------------------------------------------------------
-Results:
-Processing Time:      6.8989s
-Ground Truth Size:    136860.86 KB (1216652 keys)
-Lossy Counting Size:  473.63 KB (1624 keys)
-Misra-Gries Size:     265.46 KB (1965 keys)
-------------------------------------------------------------
-Query                | Actual   | LC Est   | MG Est
-google               | 32163    | 32163    | 30492   
-yahoo                | 13646    | 13646    | 11975   
-ebay                 | 13075    | 13075    | 11404
-yahoo.com            | 8743     | 8740     | 7072
-mapquest             | 8719     | 8716     | 7048   
+--- Processing AOL Dataset (2006) ---
+
+=====================================================================================
+RANK  | QUERY                | ACTUAL     | MG EST     | LC EST
+-------------------------------------------------------------------------------------
+1     | google               | 32163      | 30492      | 32163     
+2     | yahoo                | 13646      | 11975      | 13646     
+3     | ebay                 | 13075      | 11404      | 13075
+4     | yahoo.com            | 8743       | 7072       | 8740
+5     | mapquest             | 8719       | 7048       | 8716
+6     | myspace.com          | 8587       | 6916       | 8580
+7     | google.com           | 7985       | 6314       | 7977
+8     | myspace              | 6877       | 5209       | 6877
+9     | www.yahoo.com        | 4240       | 2579       | 4173
+10    | internet             | 4207       | 2547       | 4159
+
+=====================================================================================
+ALGORITHM STATISTICS:
+Ground Truth RAM:   101.18 MB
+Misra-Gries RAM:    0.21 MB
+Lossy Counting RAM: 0.19 MB
+Space Reduction:    99.81%
+
 
 # Count-Min Sketch
 Count-Min Sketch Configuration:
   Width: 10,000
   Depth: 5
   Total cells: 50,000
-  Approximate memory: 120 bytes
+  Approximate memory: 1563.01 KB (1.53 MB)
 Top 10 Most Frequent Queries
  1. google                                             | Actual: 32163 | Estimated: 32426
  2. yahoo                                              | Actual: 13646 | Estimated: 13846

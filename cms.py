@@ -4,13 +4,14 @@ from collections import defaultdict
 from typing import List, Tuple
 import time
 import hashlib
+import array # Use array for memory-efficient storage, and more accurate memory size calculation
 
 class CountMinSketch:
     def __init__(self, width: int = 10000, depth: int = 5):
         self.width = width
         self.depth = depth
         # Use 1D list or array.array for better cache locality and memory
-        self.table = [[0] * width for _ in range(depth)]
+        self.table = [array.array('I', [0] * width) for _ in range(depth)]
 
     def add(self, item: str, count: int = 1):
         item = item.lower().strip()
@@ -35,11 +36,24 @@ class CountMinSketch:
         return int(res)
 
     def get_stats(self) -> dict:
+        # Calculate true deep memory
+        # 1. Size of the outer list
+        total_mem = sys.getsizeof(self.table) 
+        
+        # 2. Size of each row and each integer object
+        for row in self.table:
+            total_mem += sys.getsizeof(row)
+            # Sum the size of every integer in the row
+            # Note: In Python, integers are objects (usually 28 bytes each)
+            total_mem += sum(sys.getsizeof(cell) for cell in row)
+
         return {
             'width': self.width,
             'depth': self.depth,
             'total_cells': self.width * self.depth,
-            'memory_bytes': sys.getsizeof(self.table)
+            'memory_bytes': total_mem,
+            'memory_kb': total_mem / 1024,
+            'memory_mb': total_mem / (1024 * 1024)
         }
 
 def process_aol_dataset(filepath: str, cms: CountMinSketch) -> Tuple[int, dict]:
@@ -121,7 +135,7 @@ def main():
     print(f"  Width: {stats['width']:,}")
     print(f"  Depth: {stats['depth']}")
     print(f"  Total cells: {stats['total_cells']:,}")
-    print(f"  Approximate memory: {stats['memory_bytes']:,} bytes")
+    print(f"  Approximate memory: {stats['memory_kb']:.2f} KB ({stats['memory_mb']:.2f} MB)")
     
 
     print("Top 10 Most Frequent Queries")
