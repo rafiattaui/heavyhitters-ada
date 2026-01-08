@@ -35,23 +35,25 @@ def run_comparative_test(filename, epsilon=0.0005):
                 if len(columns) > 1:
                     query = columns[1].lower().strip()
                     if not query: continue
+
+                    if query and query not in ['-', '', '""', "''"]:
                     
-                    # 1. Update Ground Truth
-                    ground_truth[query] += 1
-                    
-                    # 2. Update Lossy Counting
-                    lc.add(query)
-                    
-                    # 3. Update Misra-Gries (One-Pass)
-                    if query in mg_candidates:
-                        mg_candidates[query] += 1
-                    elif len(mg_candidates) < k - 1:
-                        mg_candidates[query] = 1
-                    else:
-                        for key in list(mg_candidates.keys()):
-                            mg_candidates[key] -= 1
-                            if mg_candidates[key] == 0:
-                                del mg_candidates[key]
+                        # 1. Update Ground Truth
+                        ground_truth[query] += 1
+                        
+                        # 2. Update Lossy Counting
+                        lc.add(query)
+                        
+                        # 3. Update Misra-Gries (One-Pass)
+                        if query in mg_candidates:
+                            mg_candidates[query] += 1
+                        elif len(mg_candidates) < k - 1:
+                            mg_candidates[query] = 1
+                        else:
+                            for key in list(mg_candidates.keys()):
+                                mg_candidates[key] -= 1
+                                if mg_candidates[key] == 0:
+                                    del mg_candidates[key]
             
             end_time = time.perf_counter()
 

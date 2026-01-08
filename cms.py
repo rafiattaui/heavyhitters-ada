@@ -3,35 +3,37 @@ import hashlib
 from collections import defaultdict
 from typing import List, Tuple
 import time
-
+import hashlib
 
 class CountMinSketch:
-    
     def __init__(self, width: int = 10000, depth: int = 5):
         self.width = width
         self.depth = depth
+        # Use 1D list or array.array for better cache locality and memory
         self.table = [[0] * width for _ in range(depth)]
-        self.seeds = [i * 2654435761 for i in range(depth)]
-    
-    def _hash(self, item: str, seed: int) -> int:
-        hash_input = f"{item}{seed}".encode('utf-8')
-        hash_value = int(hashlib.md5(hash_input).hexdigest(), 16)
-        return hash_value % self.width
-    
+
     def add(self, item: str, count: int = 1):
         item = item.lower().strip()
+        # Pre-calculate two basic hashes
+        h1 = int(hashlib.md5(item.encode('utf-8')).hexdigest(), 16)
+        h2 = int(hashlib.sha1(item.encode('utf-8')).hexdigest(), 16)
+        
         for i in range(self.depth):
-            index = self._hash(item, self.seeds[i])
+            # Kirsch-Mitzenmacher: hash_i = h1 + i * h2
+            index = (h1 + i * h2) % self.width
             self.table[i][index] += count
-    
+
     def estimate(self, item: str) -> int:
         item = item.lower().strip()
-        min_count = float('inf')
+        h1 = int(hashlib.md5(item.encode('utf-8')).hexdigest(), 16)
+        h2 = int(hashlib.sha1(item.encode('utf-8')).hexdigest(), 16)
+        
+        res = float('inf')
         for i in range(self.depth):
-            index = self._hash(item, self.seeds[i])
-            min_count = min(min_count, self.table[i][index])
-        return int(min_count)
-    
+            index = (h1 + i * h2) % self.width
+            res = min(res, self.table[i][index])
+        return int(res)
+
     def get_stats(self) -> dict:
         return {
             'width': self.width,
@@ -39,7 +41,6 @@ class CountMinSketch:
             'total_cells': self.width * self.depth,
             'memory_bytes': sys.getsizeof(self.table)
         }
-
 
 def process_aol_dataset(filepath: str, cms: CountMinSketch) -> Tuple[int, dict]:
     query_freq = defaultdict(int)
@@ -54,7 +55,7 @@ def process_aol_dataset(filepath: str, cms: CountMinSketch) -> Tuple[int, dict]:
                 parts = first_line.split('\t')
                 if len(parts) >= 2:
                     query = parts[1].strip()
-                    if query:
+                    if query and query not in ['-', '', '""', "''"]:
                         cms.add(query)
                         query_freq[query] += 1
                         total_queries += 1
@@ -69,7 +70,7 @@ def process_aol_dataset(filepath: str, cms: CountMinSketch) -> Tuple[int, dict]:
                     continue
                 
                 query = parts[1].strip()
-                if query:
+                if query and query not in ['-', '', '""', "''"]:
                     cms.add(query)
                     query_freq[query] += 1
                     total_queries += 1
