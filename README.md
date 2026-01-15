@@ -1,3 +1,7 @@
+### How to Run
+Download the dataset
+
+
 ## Results based on first iteration.
 
 # Lossy Counting & Misra-Gries Runtime
