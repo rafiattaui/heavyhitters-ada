@@ -26,7 +26,7 @@ class LossyCounting:
 
     def _prune(self):
         to_delete = [item for item in self.counts 
-                     if self.counts[item] + self.bucket_id[item] <= self.current_bucket]
+        if self.counts[item] + self.bucket_id[item] <= self.current_bucket]
         for item in to_delete:
             del self.counts[item]
             del self.bucket_id[item]

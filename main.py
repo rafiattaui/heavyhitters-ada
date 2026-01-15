@@ -2,13 +2,16 @@ import sys
 import time
 import collections
 
-def run_ground_truth(filename):
+def run_ground_truth(filename, max_lines=None):
     counts = collections.Counter()
     total = 0
     start = time.perf_counter()
     with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
         next(f)
-        for line in f:
+        for i,line in enumerate(f):
+            if max_lines and i >= max_lines:
+                break
+
             parts = line.split('\t')
             if len(parts) > 1:
                 query = parts[1].lower().strip()
@@ -19,13 +22,16 @@ def run_ground_truth(filename):
     # Return: (Total Processed, The actual Counter object, Duration)
     return total, counts, duration
 
-def run_loss_counting_test(filename, epsilon=0.0005):
+def run_loss_counting_test(filename, epsilon=0.0005, max_lines=None):
     from lossy import LossyCounting 
     lc = LossyCounting(epsilon)
     start = time.perf_counter()
     with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
         next(f)
-        for line in f:
+        for i,line in enumerate(f):
+            if max_lines and i >= max_lines:
+                break
+
             parts = line.split('\t')
             if len(parts) > 1:
                 query = parts[1].lower().strip()
@@ -35,12 +41,15 @@ def run_loss_counting_test(filename, epsilon=0.0005):
     # Return: (The counts dictionary inside LC, Duration)
     return lc.counts, duration
 
-def run_misra_gries_test(filename, k=2000):
+def run_misra_gries_test(filename, k=2000, max_lines=None):
     candidates = {}
     start = time.perf_counter()
     with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
         next(f)
-        for line in f:
+        for i,line in enumerate(f):
+            if max_lines and i >= max_lines:
+                break
+
             parts = line.split('\t')
             if len(parts) > 1:
                 query = parts[1].lower().strip()
@@ -76,6 +85,39 @@ def get_deep_size(obj, seen=None):
         size += sum(get_deep_size(i, seen) for i in obj)
     return size
 
+import csv
+import os
+
+def save_metrics_to_csv(
+    csv_file,
+    limit,
+    mg_time, mg_mem, mg_ae, mg_re,
+    lc_time, lc_mem, lc_ae, lc_re
+):
+    """
+    Appends experiment metrics to a CSV file.
+    Creates the file with header if it doesn't exist.
+    """
+
+    file_exists = os.path.isfile(csv_file)
+
+    with open(csv_file, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        if not file_exists:
+            writer.writerow([
+                "limit",
+                "mg_runtime", "mg_memory_kb", "mg_avg_abs_error", "mg_avg_rel_error",
+                "lc_runtime", "lc_memory_kb", "lc_avg_abs_error", "lc_avg_rel_error"
+            ])
+
+        writer.writerow([
+            limit,
+            round(mg_time, 4), round(mg_mem, 2), round(mg_ae, 2), round(mg_re * 100, 2),
+            round(lc_time, 4), round(lc_mem, 2), round(lc_ae, 2), round(lc_re * 100, 2)
+        ])
+
+
 def calculate_metrics(gt_data, algorithm_data, total_n, threshold_ratio=0.001):
     threshold = total_n * threshold_ratio
     abs_errors = []
@@ -96,20 +138,26 @@ def calculate_metrics(gt_data, algorithm_data, total_n, threshold_ratio=0.001):
     return avg_abs, avg_rel, len(heavy_hitters)
 
 def main():
-    filename = "user-ct-test-collection-01.txt"
+    filename = "clean.txt"
     eps = 0.0005
+    limit = sys.argv[1] if len(sys.argv) > 1 else None
+    if limit:
+        limit = int(limit)
     k_val = int(1/eps)
 
     print(f"--- Processing AOL Dataset (2006) ---")
     
     # 1. Ground Truth
-    total_n, gt_data, gt_time = run_ground_truth(filename)
+    total_n, gt_data, gt_time = run_ground_truth(filename, max_lines=limit)
     
     # 2. Misra-Gries
-    mg_data, mg_time = run_misra_gries_test(filename, k=k_val)
+    mg_data, mg_time = run_misra_gries_test(filename, k=k_val, max_lines=limit)
     
     # 3. Lossy Counting
-    lc_data, lc_time = run_loss_counting_test(filename, epsilon=eps)
+    lc_data, lc_time = run_loss_counting_test(filename, epsilon=eps, max_lines=limit)
+
+    mg_mem = get_deep_size(mg_data) / 1024     # KB
+    lc_mem = get_deep_size(lc_data) / 1024     # KB
 
     mg_avg_absolute_error, mg_avg_relative_error, mg_heavy_hitters_count = calculate_metrics(gt_data, mg_data, total_n)
     lc_avg_absolute_error, lc_avg_relative_error, lc_heavy_hitters_count = calculate_metrics(gt_data, lc_data, total_n)
@@ -143,6 +191,19 @@ def main():
     print("\n Average Errors for Heavy Hitters (Threshold: {:.4f}%)".format(0.001))
     print(f"Misra-Gries:    Avg Absolute Error: {mg_avg_absolute_error:.2f}, Avg Relative Error: {mg_avg_relative_error*100:.2f}%")
     print(f"Lossy Counting: Avg Absolute Error: {lc_avg_absolute_error:.2f}, Avg Relative Error: {lc_avg_relative_error*100:.2f}%")
+
+    save_metrics_to_csv(
+    csv_file="metrics.csv",
+    limit=limit if limit else total_n,
+    mg_time=mg_time,
+    mg_mem=mg_mem,
+    mg_ae=mg_avg_absolute_error,
+    mg_re=mg_avg_relative_error,
+    lc_time=lc_time,
+    lc_mem=lc_mem,
+    lc_ae=lc_avg_absolute_error,
+    lc_re=lc_avg_relative_error
+)
 
 if __name__ == "__main__":
     main()

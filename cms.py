@@ -24,6 +24,9 @@ class CountMinSketch:
     def _get_hashes(self, item: str):
         data = item.encode('utf-8')
 
+        # Originally used hashlib.md5 and hashlib.sha1, but they are slower, since they are cryptographic hashes.
+        # Using zlib's crc32 and adler32 for faster non-cryptographic hashing.
+        # These produce 32-bit hash values, suitable for our needs.
         h1 = zlib.crc32(data) & 0xffffffff # Bitwise AND to ensure unsigned integer
         h2 = zlib.adler32(data) & 0xffffffff # Bitwise AND to ensure unsigned integer
         return h1, h2
@@ -61,7 +64,7 @@ class CountMinSketch:
             "memory_mb": total_mem / (1024 * 1024)
         }
 
-def process_aol_dataset(filepath: str, cms: CountMinSketch) -> Tuple[int, dict]:
+def process_aol_dataset(filepath: str, cms: CountMinSketch, limit=None) -> Tuple[int, dict]:
     query_freq = defaultdict(int)
     total_queries = 0
     
@@ -80,6 +83,9 @@ def process_aol_dataset(filepath: str, cms: CountMinSketch) -> Tuple[int, dict]:
                         total_queries += 1
             
             for line_num, line in enumerate(f, start=2):
+                if limit and line_num > limit:
+                    break
+
                 line = line.strip()
                 if not line:
                     continue
@@ -131,12 +137,12 @@ def calculate_metrics(gt_data, algorithm_data, total_n, threshold_ratio=0.001):
 
 
 def main():
-    filepath = "user-ct-test-collection-01.txt"
+    filepath = "clean.txt"
     width = 10000
     depth = 5
-    
-    if len(sys.argv) > 1:
-        filepath = sys.argv[1]
+    limit = sys.argv[1] if len(sys.argv) > 1 else None
+    if limit:
+        limit = int(limit)
     
     print("Count-Min Sketch for AOL Dataset")
     
@@ -144,7 +150,7 @@ def main():
 
     startTime = time.perf_counter()
     
-    total_queries, query_freq = process_aol_dataset(filepath, cms)
+    total_queries, query_freq = process_aol_dataset(filepath, cms, limit=limit)
 
     endTime = time.perf_counter()
     print(f"\nProcessing completed in {endTime - startTime:.2f} seconds.\n")
@@ -204,6 +210,7 @@ def main():
             break
         except EOFError:
             break
+        
     
     print("\nDone!")
 
